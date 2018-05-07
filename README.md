@@ -1,8 +1,12 @@
-# [NORA]
+# nora_openstack
+Openstack Kolla installation playbooks for use in the NORA environment
+
+# [NORA?]
 __N__ etwork __O__ perations __R__ eference __A__ rchitecture
 
 **Nora’s Mission**
 
+- Our aim is to provide a set of tools and software to demonstrate network automation best practices and use cases
 - Provide a base topology for which to deliver a variety of demonstrations based upon customer use cases in an automatic, programmatic, and consistent fashion
 - Highlight the “Simple Engineering” of Juniper and open source software; aka Simple AF (Simple Automated Framework)
 - Be extensible, reproduceable and awesome
