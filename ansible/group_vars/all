@@ -1,0 +1,114 @@
+# [COMMON]
+is_virtual: False
+ntp:
+  - ntp.juniper.net
+  - ntp2.juniper.net
+  - ntp3.juniper.net
+
+[SALT]
+git_repo: https://github.com/saltstack/salt.git
+git_branch: 2017.7
+
+# [KOLLA]
+kolla_git_repo: https://github.com/openstack/kolla-ansible.git
+kolla_git_branch: stable/queens
+
+# [ANSIBLE]
+ansible_ssh_private_key_file: /home/juniper/.ssh/id_rsa
+ansible_user: juniper
+ansible_become_pass: juniper123
+
+# [WISTAR]
+wistar_title: Cluster 128
+wistar_ssh_user: juniper
+wistar_public_ssh_key: ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDFbCFkF2qc8f0cgkP2oBN0i8/l5zqgrHEcWbm6Poekh0J/amK/ZWUKUuc1bAH5uXCeHpdpCcYcFMa1mprDftaUvRZaXh9yTOo7drIkLS8ZslbtsMxVGrynu7JMMtfm1tT0BIo7qUFsDbvKqmAIBB4ui0jzLBbYMkFRvo6JFAf47OoG/y5mY5ovwYM0aJ6X7o4QZkXPc5zM90xITtoHwXkUdpNEFMW4AF8ZcLJSZsdQTlqyKxoTHIRMmo2EOqynCvujrczJFoCoYGwfksVxFt3ddRSzLzELO9yV4ksIcNU30CzkYY3igUO/2KpsQY1dJu/OIS2rYJsNFt1B6To/aW1b juniper@coe-srv-01
+wistar_port: 8080
+wistar_git_branch: openstack
+wistar_default_instance_password: juniper123
+wistar_mgmt_network_name: wistar_mgmt
+wistar_mgmt_network_subnet_name: wistar_mgmt_subnet
+wistar_mgmt_network_subnet: 192.168.128.0/24
+wistar_mgmt_network_subnet_pool_start: 192.168.128.3
+wistar_mgmt_network_subnet_pool_end: 192.168.128.251
+wistar_mgmt_network_prefix: 192.168.128.
+wistar_mgmt_network_gateway: 192.168.128.1
+
+# [OPENSTACK]
+keystone_admin_user: admin
+keystone_admin_password: contrail1
+keystone_project_name: admin
+network_interface: eno1
+external_interface: ens2f1
+tunnel_interface: ens2f0
+os_br_int_mtu: 9000
+os_br_tun_mtu: 9000
+os_external_network_name: external_254
+os_external_network_subnet_name: external_254_subnet
+os_external_network_subnet: 10.254.254.0/24
+os_external_network_pool_start: 10.254.254.100
+os_external_network_pool_end: 10.254.254.110
+os_external_router_name: wistar_router
+os_external_router_ip: 10.254.254.253
+os_external_gateway_ip: 10.254.254.254
+
+# [IMAGES]
+os_image_src: 10.10.10.10
+os_image_src_path: /opt/docker/gostatic
+os_image_local_path: /tmp/images
+os_glance_images:
+
+  vFPC-2017121:
+    image_descr: vFPC
+    image_type: junos_vpfe
+    min_disk: 20
+  vmx174R116:
+    image_descr: vMX
+    image_type : junos_vre
+    min_disk: 20
+  vqfx-173R17:
+    image_descr: vQFX
+    image_type : junos_vqfx_re
+    min_disk: 20
+  vqfx-cosim-2017081510:
+    image_descr: vqfx-cosim
+    image_type : junos_vqfx_cosim
+    min_disk: 20
+  vrr-174:
+    image_descr: vRR 17.4
+    image_type : junos_vrr
+    min_disk: 0
+  vsrx151X49-D120.3:
+    image_descr: vSRX 15.1X49-D120.3
+    image_type : junos_vsrx
+    min_disk: 20
+  centos6:
+    image_descr: centos6
+    image_type: linux
+    min_disk: 20
+  centos7:
+    image_descr: centos7
+    image_type: linux
+    min_disk: 20
+  ubuntu1604:
+    image_descr: ubuntu1604
+    image_type: ubuntu16
+    min_disk: 20
+  ubuntu-16.04.2-100G:
+    image_descr: ubuntu1604-100G
+    image_type: ubuntu16
+    min_disk: 100
+
+# [DOCKER]
+internal_registry: 10.10.10.10:5001
+internal_mirror: 10.10.10.10:5000
+
+# { "insecure-registries":["10.86.9.12:5001"],
+#  "registry-mirrors": ["http://10.86.9.12:5000"]
+# }
+
+# [NTP]
+ntp:
+  - ntp.juniper.net
+  - ntp2.juniper.net
+  - ntp3.juniper.net
+

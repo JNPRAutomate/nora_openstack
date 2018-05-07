@@ -1,0 +1,43 @@
+---
+- name: "Ensure date/time is accurate"
+  apt:
+    name: "{{ item }}"
+    state: present
+    update_cache: false
+  with_items:
+    - ntp
+    - ntpdate
+  tags: ntp
+
+- name: "Check <timedatactl> ntp know is set"
+  shell: timedatectl | grep NTP | grep yes
+  register: timedatectl_out
+  failed_when: timedatectl_out.rc != 0 and timedatectl_out.rc != 1
+  tags: ntp
+    
+- name: "Stop ntp service if necessary"
+  service:
+    name: ntp
+    state: stopped
+  tags: ntp
+  when: timedatectl_out.rc != 0
+
+- name: "Set the date with <ntpdate>"
+  command: ntpdate {{ ntp|first }}
+  tags: ntp
+  when: timedatectl_out.rc != 0
+
+- name: "Setup <ntp.conf> in /etc"
+  template:
+    src: templates/ntp.cfg.j2
+    dest: /etc/ntp.conf
+  tags: ntp
+
+- name: "Restart ntp service"
+  service:
+    name: ntp
+    state: restarted
+    enabled: yes
+  tags: ntp
+  when: timedatectl_out.rc != 0
+

@@ -1,0 +1,11 @@
+---
+#
+# Actions to take on each OS cluster member after OS has been deployed
+# but before we create any virtual networks, import images, etc
+#
+
+- name: "Configure br-int mtu to <{{ os_br_int_mtu }}>"
+  shell: 'docker exec -t openvswitch_vswitchd bash -c "/usr/bin/ovs-vsctl set int br-int mtu_request={{ os_br_int_mtu }}"'
+
+- name: "Configure br-tun mtu to <{{ os_br_int_mtu }}>"
+  shell: 'docker exec -t openvswitch_vswitchd bash -c "/usr/bin/ovs-vsctl set int br-tun mtu_request={{ os_br_tun_mtu }}"'

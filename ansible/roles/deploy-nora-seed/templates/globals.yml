@@ -1,0 +1,25 @@
+---
+{% set controller_name = groups['nora-os-controller']|first %}
+kolla_base_distro: "ubuntu"
+openstack_release: "pike"
+kolla_install_type: "source"
+kolla_internal_vip_address: "{{ hostvars[controller_name].ansible_host }}"
+enable_haproxy: "no"
+enable_host_ntp: "no"
+enable_nova: "yes"
+network_interface: "{{ network_interface }}"
+neutron_external_interface: "{{ external_interface }}"
+tunnel_interface: "{{ tunnel_interface }}"
+neutron_plugin_agent: "openvswitch"
+designate_backend: "bind9"
+designate_ns_record: "edaf.juniper.net"
+tempest_image_id:
+tempest_flavor_ref_id:
+tempest_public_network_id:
+tempest_floating_network_name:
+node_custom_config: "/etc/kolla/config"
+# wistar specific edits
+enable_nova_serialconsole_proxy: "no"
+enable_neutron_provider_networks: "yes"
+
+

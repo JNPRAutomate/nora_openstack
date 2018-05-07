@@ -1,0 +1,7 @@
+Host *
+    TcpKeepAlive yes
+    ServerAliveInterval 30
+    ServerAliveCountMax 1000
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+    VisualHostKey yes

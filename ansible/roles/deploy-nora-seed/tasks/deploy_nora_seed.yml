@@ -1,0 +1,156 @@
+---
+- name: "Install NFS client with apt"
+  apt:
+    name: "{{ item }}"
+    state: latest
+  with_items:
+    - rpcbind
+    - nfs-common
+  become: true
+
+- name: "Install Ansible config file to </etc/ansible/ansible.cfg>"
+  copy:
+    src: templates/ansible.cfg
+    dest: /etc/ansible/ansible.cfg
+
+- name: "Install non-broken python openssl"
+  pip:
+    name: pyOpenSSL
+    version: 16.2.0
+
+- name: "Install pssh for ssh key distribution"
+  pip:
+    name: pssh
+    state: latest
+
+- name: "Clone latest kolla-ansible version from <{{ kolla_git_branch }}> branch"
+  git:
+    repo: "{{ kolla_git_repo }}"
+    dest: /tmp/kolla-ansible
+    version: "{{ kolla_git_branch }}"
+  become: false
+
+- name: "Install kolla packages specified in requirements.txt"
+  pip:
+    requirements: requirements.txt
+    chdir: /tmp/kolla-ansible
+
+- name: "Install latest kolla-ansible version from master branch"
+  shell: "python setup.py install"
+  args:
+    chdir: /tmp/kolla-ansible
+  become: true
+
+# Seems to be a change in Docker images format which are not supported currently by latest kolla pip version
+#- name: "Install latest kolla-ansible version with pip"
+#  pip:
+#    name: kolla-ansible
+#    state: latest
+
+- name: "Create Kolla main directory"
+  file:
+    name: /etc/kolla
+    state: directory
+
+- name: "Copy Kolla <globals.yml> file"
+  template:
+    src: templates/globals.yml
+    dest: /etc/kolla/globals.yml
+
+- name: "Copy Kolla <passwords.yml> file"
+  template:
+    src: templates/passwords.yml
+    dest: /etc/kolla/passwords.yml
+
+- name: "Generate OpenStack cluster passwords"
+  shell: kolla-genpwd
+
+- name: "Copy Kolla <multinode.j2> inventory file"
+  template:
+    src: templates/multinode.j2
+    dest: /etc/kolla/multinode
+
+- name: "Ensure kolla custom config dir exists"
+  file:
+    dest: /etc/kolla/config/
+    state: directory
+
+- name: "Render custom OpenStack cluster nova config file"
+  template:
+    src: templates/custom_configs/nova/nova-compute.j2
+    dest: "{{ role_path }}/templates/custom_configs/nova/nova-compute.conf"
+
+- name: "Copy custom OpenStack cluster configs"
+  copy:
+    src: templates/custom_configs/
+    dest: /etc/kolla/config
+
+# Deactivate StrictHostKeyChecking
+- name: "Copy ssh_config to </root/.ssh/config>"
+  copy:
+    src: templates/ssh_config
+    dest: /root/.ssh/config
+    owner: root
+    mode: 0600
+
+- name: "Add <{{ inventory_hostname }}> host to </etc/hosts> file"
+  lineinfile:
+    dest: /etc/hosts
+    line: "{{ hostvars[item].ansible_host }} {{ item }}.{{ domain }}  {{ item }}"
+  with_items: "{{ groups['seeds'] }}"
+
+- name: "Add all OpenStack nodes to </etc/hosts> file"
+  lineinfile:
+    dest: /etc/hosts
+    line: "{{ hostvars[item].ansible_host }} {{ item }}.{{ domain }}  {{ item }}"
+  with_items: "{{ groups['nora-os-cluster'] }}"
+
+- name: "Grant user <{{ lookup('env','USER') }}> passwordless sudo"
+  lineinfile:
+    dest: /etc/sudoers
+    state: present
+    regexp: "^{{ lookup('env','USER') }}"
+    line: "{{ lookup('env','USER') }} ALL=(ALL) NOPASSWD: ALL"
+  delegate_to: "{{ item }}"
+  with_items: "{{ groups['seeds'] }}"
+
+- name: "Ensure SSH keys for user {{ lookup('env','USER') }} don't already exist"
+  stat:
+    path: "~/.ssh/id_rsa"
+  become: false
+  register: ssh_key
+  tags:
+    - ssh-keys
+
+- name: "Create user <{{ lookup('env','USER') }}> SSH key"
+  user:
+    name: "{{ ansible_user_id  }}"
+    generate_ssh_key: yes
+    ssh_key_bits: 2048
+    ssh_key_file: .ssh/id_rsa
+  when: ssh_key.stat.exists == False
+  become: false
+
+- name: "Add all OpenStack hosts to user <{{ lookup('env','USER') }}> known_hosts file"
+  shell: "ssh-keyscan -H -t ecdsa {{ item }} >> ~/.ssh/known_hosts"
+  with_items: "{{ groups['nora-os-cluster'] }}"
+  become: false
+
+- name: "Add Wistar host to user <{{ lookup('env','USER') }}> known_hosts file"
+  shell: "ssh-keyscan -H -t ecdsa {{ item }} >> ~/.ssh/known_hosts"
+  with_items: "{{ groups['wistar'] }}"
+  become: false
+
+- name: "Set SSH Script executable"
+  file:
+    path: ~/nora/tools/genssh.sh
+    mode: u+x
+  become: false
+
+- name: "Add user <{{ lookup('env','USER') }}> ssh public key to all OpenStack cluster nodes"
+  shell: "./genssh.sh {{ inventory_dir }}/hosts"
+  args:
+    chdir: ~/nora/tools
+  become: false
+
+  #apt-get install rpcbind nfs-common

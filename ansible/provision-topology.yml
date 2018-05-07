@@ -1,0 +1,6 @@
+---
+# this playbook will stand-up a nora topology
+
+- hosts: seeds
+  roles:
+    - role: deploy-nora-topology

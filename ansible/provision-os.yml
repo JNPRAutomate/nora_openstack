@@ -1,0 +1,24 @@
+---
+# this playbook will stand-up a nora infrastructure
+
+- hosts: nora-os-cluster
+  gather_facts: False
+  roles:
+    - role: prepare-nora-os-cluster
+      become: true
+
+- hosts: seeds
+  roles:
+    - role: deploy-nora-os-cluster
+      become: true
+
+- hosts: nora-os-cluster
+  roles:
+    - role: post-deploy-nora-os-cluster
+      become: true
+
+- hosts: wistar
+  gather_facts: False
+  roles:
+    - role: deploy-nora-wistar
+      become: true

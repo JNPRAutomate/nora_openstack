@@ -1,0 +1,338 @@
+- name: "Install Python <shade> library with pip"
+  pip:
+    name: shade
+    state: present
+  become: true
+
+# There must be a way to include those vars in play
+#- name: "Set OpenStack environment variables"
+#  shell: . /etc/kolla/admin-openrc.sh
+
+- name: "Creating local image directory in /tmp/images"
+  file:
+    path: "{{ os_image_local_path }}"
+    state: directory
+
+- name: "Mount image source {{ os_image_src }}:{{os_image_src_path}} to {{ os_image_local_path }}"
+  mount:
+    path: "{{ os_image_local_path }}"
+    src: "{{ os_image_src }}:{{ os_image_src_path }}"
+    fstype: nfs
+    opts: ro
+    state: mounted
+  become: true
+
+- name: "Download cirros image to /tmp"
+  get_url:
+    url: http://download.cirros-cloud.net/0.4.0/cirros-0.4.0-x86_64-disk.img
+    dest: /tmp
+
+- name: "Add cirros image to glance"
+  os_image:
+    name: cirros
+    container_format: bare
+    disk_format: qcow2
+    state: present
+    filename: "/tmp/cirros-0.4.0-x86_64-disk.img"
+    kernel: cirros-vmlinuz
+    ramdisk: cirros-initrd
+    properties:
+      cpu_arch: x86_64
+      distro: ubuntu
+      os_type: linux
+
+- name: "Get cirros image id"
+  os_image_facts:
+    image: cirros
+  register: IMAGE_FACTS
+
+- name: "Update cirros image visibility"
+  command: "glance image-update --visibility shared {{ IMAGE_FACTS.ansible_facts.openstack_image.id }}"
+
+- name: "Add custom instance images to glance"
+  os_image:
+    name: "{{ item.key }}"
+    container_format: bare
+    disk_format: qcow2
+    state: present
+    min_disk: "{{ item.value.min_disk }}"
+    filename: "{{ os_image_local_path }}/{{ item.key }}.qcow2"
+  with_dict: "{{ os_glance_images }}"
+
+- name: "Umount image source {{ os_image_src }}:{{os_image_src_path}}"
+  mount:
+    path: "{{ os_image_local_path }}"
+    src: "{{ os_image_src }}:{{ os_image_src_path }}"
+    fstype: nfs
+    opts: ro
+    state: unmounted
+  become: true
+
+- name: "Cleanup cirros image"
+  file:
+    path: "/tmp/cirros-0.4.0-x86_64-disk.img"
+    state: absent
+
+- name: "Cleanup image source {{ os_image_src }}:{{os_image_src_path}}"
+  mount:
+    path: "{{ os_image_local_path }}"
+    src: "{{ os_image_src }}:{{ os_image_src_path }}"
+    fstype: nfs
+    opts: ro
+    state: umounted
+  become: true
+
+- name: "Get images ids from glance"
+  os_image_facts:
+    image: "{{ item }}"
+  register: IMAGE_FACTS
+  with_items: "{{ os_glance_images }}"
+
+# os_image module doesn't provide shared state visibility hence we do it manually
+- name: "Update image visibility state to be <shared>"
+  command: "glance image-update --visibility shared {{ item.ansible_facts.openstack_image.id }}"
+  with_items: "{{ IMAGE_FACTS.results }}"
+
+- name: "Create network <{{ os_external_network_name }}>"
+  os_network:
+    state: present
+    name: "{{ os_external_network_name }}"
+    external: true
+    provider_physical_network: physnet1
+    provider_network_type: flat
+
+- name: "Create network <{{ wistar_mgmt_network_name }}>"
+  os_network:
+    state: present
+    name: "{{ wistar_mgmt_network_name }}"
+    provider_network_type: vxlan
+    #port_security_enabled: false
+    shared: true
+
+- name: "Create subnet <{{ os_external_network_subnet_name }}>"
+  os_subnet:
+    state: present
+    network_name: "{{ os_external_network_name }}"
+    name: "{{ os_external_network_subnet_name }}"
+    cidr: "{{ os_external_network_subnet }}"
+    allocation_pool_start: "{{ os_external_network_pool_start }}"
+    allocation_pool_end: "{{ os_external_network_pool_end }}"
+    gateway_ip: "{{ os_external_gateway_ip }}"
+
+- name: "Create subnet <{{ wistar_mgmt_network_subnet_name }}>"
+  os_subnet:
+    state: present
+    network_name: "{{ wistar_mgmt_network_name }}"
+    name: "{{ wistar_mgmt_network_subnet_name }}"
+    cidr: "{{ wistar_mgmt_network_subnet }}"
+    allocation_pool_start: "{{ wistar_mgmt_network_subnet_pool_start }}"
+    allocation_pool_end: "{{ wistar_mgmt_network_subnet_pool_end }}"
+
+- name: "Create router <{{ os_external_router_name }}>"
+  os_router:
+    state: present
+    name: "{{ os_external_router_name }}"
+    network: "{{ os_external_network_name }}"
+    external_fixed_ips:
+      - subnet: "{{ os_external_network_subnet_name }}"
+        ip: "{{ os_external_router_ip }}"
+    interfaces:
+      - "{{ wistar_mgmt_network_subnet_name }}"
+
+- name: "Get user <{{ keystone_admin_user }}> id"
+  os_user_facts:
+    name: "{{ keystone_admin_user }}"
+  register: ADMIN_USER_ID
+
+- name: "User <{{ keystone_admin_user }}> id: <{{ ADMIN_USER_ID.ansible_facts.openstack_users[0].id }}>"
+  debug:
+    msg: "{{ ADMIN_USER_ID.ansible_facts.openstack_users[0].id }}"
+
+- name: "Get project <{{ keystone_project_name }}> id"
+  os_project_facts:
+    name: "{{ keystone_project_name }}"
+  register: ADMIN_PROJECT_ID
+
+- name: "Project <{{ keystone_project_name }}> id: <{{ ADMIN_PROJECT_ID.ansible_facts.openstack_projects[0].id }}>"
+  debug:
+    msg: "{{ ADMIN_PROJECT_ID.ansible_facts.openstack_projects[0].id }}"
+
+- name: "Get security group id"
+  shell: "openstack security group list --project {{ ADMIN_PROJECT_ID.ansible_facts.openstack_projects[0].id }} | awk '/ default / {print $2}'"
+  register: ADMIN_SEC_GROUP
+
+- name: "Admin security group id "
+  debug:
+    msg: "{{ ADMIN_SEC_GROUP.stdout }}"
+
+# We disabled Security Group somewhere?
+
+#- name: "Create ICMP security rule"
+#  os_security_group_rule:
+#    security_group: "{{ ADMIN_SEC_GROUP }}"
+#    protocol: icmp
+#    ethertype: IPv4
+#    direction: ingress
+
+#- name: "Create SSH security rule"
+#  os_security_group_rule:
+#    security_group: "{{ ADMIN_SEC_GROUP }}"
+#    protocol: TCP
+#    ethertype: IPv4
+#    direction: ingress
+#   port_range_min: 22
+#    port_range_max: 22
+
+#- name: "Create HEAT-CFN security rule 8000"
+#  os_security_group_rule:
+#    security_group: "{{ ADMIN_SEC_GROUP }}"
+#    protocol: TCP
+#    ethertype: IPv4
+#    direction: ingress
+#    port_range_min: 8000
+#    port_range_max: 8000
+
+#- name: "Create HEAT-CFN security rule 8080"
+#  os_security_group_rule:
+#    security_group: "{{ ADMIN_SEC_GROUP }}"
+#    protocol: TCP
+#    ethertype: IPv4
+#    direction: ingress
+#    port_range_min: 8080
+#    port_range_max: 8080
+
+- name: "Create OpenStack ssh keys for user {{ ansible_user }}"
+  os_keypair:
+    state: present
+    name: default_nora
+    public_key_file: "/home/{{ ansible_user }}/.ssh/id_rsa.pub"
+
+- name: "Create 'm1.tiny' flavor with 512MB of RAM, 1 virtual CPU, and 1GB of local disk"
+  os_nova_flavor:
+    state: present
+    name: m1.tiny
+    ram: 512
+    vcpus: 1
+    disk: 1
+    ephemeral: 0
+
+- name: "Create 'm1.small' flavor with 2048MB of RAM, 1 virtual CPU, and 20GB of local disk"
+  os_nova_flavor:
+    state: present
+    name: m1.small
+    ram: 2048
+    vcpus: 1
+    disk: 20
+    ephemeral: 0
+
+- name: "Create 'm1.medium' flavor with 4096MB of RAM, 2 virtual CPU, and 40GB of local disk"
+  os_nova_flavor:
+    state: present
+    name: m1.medium
+    ram: 4096
+    vcpus: 2
+    disk: 40
+    ephemeral: 0
+
+- name: "Create 'm1.large' flavor with 8192MB of RAM, 4 virtual CPU, and 80GB of local disk"
+  os_nova_flavor:
+    state: present
+    name: m1.large
+    ram: 8192
+    vcpus: 4
+    disk: 80
+    ephemeral: 0
+
+- name: "Create 'm1.xlarge' flavor with 16384MB of RAM, 8 virtual CPU, and 160GB of local disk"
+  os_nova_flavor:
+    state: present
+    name: m1.xlarge
+    ram: 16384
+    vcpus: 8
+    disk: 160
+    ephemeral: 0
+
+- name: "Create 'j1.small' flavor with 1024MB of RAM, 1 virtual CPU, and 30GB of local disk"
+  os_nova_flavor:
+    state: present
+    name: j1.small
+    ram: 1024
+    vcpus: 1
+    disk: 30
+    ephemeral: 0
+
+- name: "Create 'j1.medium' flavor with 8192MB of RAM, 3 virtual CPU, and 30GB of local disk"
+  os_nova_flavor:
+    state: present
+    name: j1.medium
+    ram: 8192
+    vcpus: 3
+    disk: 30
+    ephemeral: 0
+
+- name: "Create 'j1.large' flavor with 8182MB of RAM, 4 virtual CPU, and 40GB of local disk"
+  os_nova_flavor:
+    state: present
+    name: j1.large
+    ram: 8192
+    vcpus: 4
+    disk: 40
+    ephemeral: 0
+
+- name: "Create 'j1.xsmall' flavor with 512MB of RAM, 1 virtual CPU, and 30GB of local disk"
+  os_nova_flavor:
+    state: present
+    name: j1.xsmall
+    ram: 512
+    vcpus: 1
+    disk: 30
+    ephemeral: 0
+
+- name: "Create 'j1.xlarge' flavor with 16384MB of RAM, 4 virtual CPU, and 50GB of local disk"
+  os_nova_flavor:
+    state: present
+    name: j1.xlarge
+    ram: 16384
+    vcpus: 4
+    disk: 50
+    ephemeral: 0
+
+- name: "Create 'j1.xlarge_s' flavor with 16384MB of RAM, 4 virtual CPU, and 100GB of local disk"
+  os_nova_flavor:
+    state: present
+    name: j1.xlarge_s
+    ram: 16384
+    vcpus: 4
+    disk: 100
+    ephemeral: 0
+
+- name: "Create 'j1.storage' flavor with 4096MB of RAM, 2 virtual CPU, and 120GB of local disk"
+  os_nova_flavor:
+    state: present
+    name: j1.storage
+    ram: 4096
+    vcpus: 2
+    disk: 120
+    ephemeral: 0
+
+- name: "Update quotas"
+  os_quota:
+    name: "{{ keystone_project_name }}"
+    cores: -1
+    fixed_ips: -1
+    floating_ips: -1
+    floatingip: -1
+    instances: -1
+    pool: -1
+    port: -1
+    ram: -1
+
+- name: "Register Glance images in Wistar"
+  uri:
+    url: "http://{{ hostvars[groups['wistar'][0]].ansible_host }}:8080/api/importGlanceImage/"
+    method: POST
+    body: "{ \"image_name\": {{ item.key | to_json }}, \"image_type\": {{ item.value.image_type | to_json }}, \"image_descr\": {{ item.value.image_descr | to_json }} }"
+    body_format: json
+    headers:
+      Content-Type: "application/json"
+  with_dict: "{{ os_glance_images }}"

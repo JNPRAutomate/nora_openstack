@@ -1,0 +1,13 @@
+---
+- name: "Install Python"
+  raw: "apt-get update && apt-get install -y python"
+
+- name: "Install Python pip"
+  apt:
+    name: python-pip
+    state: latest
+
+- name: "Update Python pip to latest version"
+  pip:
+    name: pip
+    state: latest

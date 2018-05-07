@@ -1,0 +1,137 @@
+---
+- name: "Gather facts"
+  setup:
+
+# This doesn't work well since Kolla playbook also writes host entries to /etc/hosts.
+#We must go with real hostname in our inventory hosts file.
+#- name: "Add all OpenStack nodes to </etc/hosts> file"
+#  lineinfile:
+#    dest: /etc/hosts
+#    line: "{{ hostvars[item].ansible_host }} {{ item }}.{{ domain }}  {{ item }}"
+#  with_items: "{{ groups['nora-os-cluster'] }}"
+
+- name: "Install linux kernel modules for kernel version <{{ ansible_kernel }}>"
+  apt:
+    name: "{{ item }}"
+    update_cache: true
+    state: present
+  with_items:
+    - linux-image-extra-{{ ansible_kernel }}
+    - linux-image-extra-virtual
+
+# External NIC is not configured in /etc/networks/interfaces.d. Bring it up manually
+# Should be better having a template setting this so we survive a reboot?
+# source /etc/network/interfaces.d/*.cfg
+- name: Set network interfaces UP
+  shell: ip link set dev {{ external_interface }} up
+
+- name: "Set interface <{{ external_interface }}> MTU size to 9000 bytes"
+  command: "ip link set {{ external_interface }} mtu 9000"
+
+- name: "Make interface {{ external_interface }} MTU size persistent"
+  interfaces_file:
+    dest: /etc/network/interfaces
+    iface: "{{ external_interface }}"
+    option: mtu
+    value: 9000
+    backup: yes
+    state: present
+  register: "{{ external_interface }}_cfg"
+
+- name: "Set interface <{{ tunnel_interface }}> MTU size to 9000 bytes"
+  command: "ip link set {{ tunnel_interface }} mtu 9000"
+
+- name: "Make interface {{ tunnel_interface }} MTU size persistent"
+  interfaces_file:
+    dest: /etc/network/interfaces
+    iface: "{{ tunnel_interface }}"
+    option: mtu
+    value: 9000
+    backup: yes
+    state: present
+  register: "{{ tunnel_interface }}_cfg"
+
+- name: "Install required packages with apt"
+  apt:
+    name: '{{ item }}'
+    state: present
+    update_cache: true
+  with_items:
+    - docker.io
+    - ntp
+    - apt-transport-https
+    - sshpass
+    - python-oslo-config
+    - python-dev
+    - libffi-dev
+    - gcc
+    - libssl-dev
+    - python-selinux
+    - qemu-kvm
+    - libvirt-bin
+    - aptitude
+
+- name: Install non-broken python openssl
+  pip:
+    name: pyOpenSSL
+    version: 16.2.0
+
+- name: "Add user <{{ lookup('env','USER') }}> to docker group"
+  user:
+    name: "{{ lookup('env','USER') }}"
+    append: yes
+    groups: docker
+
+- name: "Create docker config dir in </etc>"
+  file:
+    dest: /etc/docker
+    state: directory
+
+- name: "Configure docker deamon defaults in </etc/docker/daemon.josn>"
+  template:
+    src: templates/docker_daemon.j2
+    dest: /etc/docker/daemon.json
+
+- name: "Create systemd docker config dir in </etc/systemd/system>"
+  file:
+    name: /etc/systemd/system/docker.service.d
+    state: directory
+
+- name: "Restart docker service"
+  service:
+    name: docker
+    state: restarted
+    enabled: yes
+    daemon_reload: yes
+
+# https://bugs.launchpad.net/kolla/+bug/1687459
+# https://docs.openstack.org/project-deploy-guide/kolla-ansible/ocata/quickstart.html
+- name: "Stop libvirt-bin service"
+  service:
+    name: libvirt-bin
+    state: stopped
+    enabled: no
+    daemon_reload: no
+
+- name: "Ensure SSH keys for user {{ lookup('env','USER') }} don't already exist"
+  stat:
+    path: "~/.ssh/id_rsa"
+  become: true
+  become_user: "{{ lookup('env','USER') }}"
+  register: ssh_key
+  tags:
+    - ssh-keys
+
+- name: "Create user <{{ lookup('env','USER') }}> SSH key"
+  user:
+    name: "{{ lookup('env','USER') }}"
+    generate_ssh_key: yes
+    ssh_key_bits: 2048
+    ssh_key_file: .ssh/id_rsa
+  when: ssh_key.stat.exists == False
+
+- name: "Load vhost_net kernel module for KVM"
+  modprobe:
+    name: vhost_net
+    state: present
+  become: true

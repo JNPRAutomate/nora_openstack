@@ -1,0 +1,2 @@
+---
+- include_tasks: post_deploy_nora_os.yml

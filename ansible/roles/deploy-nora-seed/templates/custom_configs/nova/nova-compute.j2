@@ -1,0 +1,39 @@
+[DEFAULT]
+# ignore disk allocation for virtual labs
+disk_allocation_ratio = 16.0
+# always for vfat config drive for vmx
+config_drive_format=vfat
+# leave 8GB of RAM for controller functions
+# comment out to leave at default value of 512MB
+reserved_host_memory_mb = 1024
+# do not force raw images
+force_raw_images = False
+# ensure no space pre-allocation is done
+preallocate_images = none
+
+# quota management - disable all quotas
+#https://docs.openstack.org/nova/pike/configuration/sample-config.html
+[quota]
+cores = -1
+fixed_ips = -1
+floating_ips = -1
+injected_files = -1
+instances = -1
+metadata_items = -1
+networks = -1
+ram = -1
+security_groups = -1
+server-group-members = -1
+server-groups = -1
+
+[libvirt]
+{% if is_virtual %}
+virt_type = qemu
+cpu_mode = host-model
+{% else %}
+virt_type = kvm
+cpu_mode = host-passthrough
+{% endif %}
+
+[serial_console]
+enabled = True

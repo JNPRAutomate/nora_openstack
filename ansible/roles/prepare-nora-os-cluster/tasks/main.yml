@@ -1,0 +1,6 @@
+---
+- include_tasks: install_python.yml
+
+- include_tasks: install_ntp.yml
+
+- include_tasks: configure_linux.yml

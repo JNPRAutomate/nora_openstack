@@ -1,0 +1,23 @@
+---
+- name: "Run apt-get update if the last one is more than 3600 seconds ago only"
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: "Install python2 from repo"
+  apt:
+    name: python
+    state: latest
+  become: true
+
+- name: "Install python-pip from repo"
+  apt:
+    name: python-pip
+    state: latest
+  become: true
+
+- name: "Update python pip to latest"
+  pip:
+    name: pip
+    state: latest
+  become: true

@@ -1,0 +1,8 @@
+---
+
+# this playbook will provision nora seed
+
+- hosts: seeds
+  roles:
+    - role: deploy-nora-seed
+      become: true

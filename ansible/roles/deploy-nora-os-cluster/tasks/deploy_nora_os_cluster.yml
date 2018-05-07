@@ -1,0 +1,75 @@
+- name: "Grant user <{{ lookup('env','USER') }}> passwordless sudo"
+  lineinfile:
+    dest: /etc/sudoers
+    state: present
+    regexp: "^{{ lookup('env','USER') }}"
+    line: "{{ lookup('env','USER') }} ALL=(ALL) NOPASSWD: ALL"
+  delegate_to: "{{ item }}"
+  with_items: "{{ groups['nora-os-cluster'] }}"
+
+- name: "Write the new instance host key to known_hosts file"
+  shell: "ssh-keyscan -H -t ecdsa {{ inventory_hostname }} > ~/.ssh/known_hosts"
+
+- name: "Bootstrap Openstack cluster"
+  command: kolla-ansible -i multinode bootstrap-servers
+  args:
+    chdir: /etc/kolla
+  become: false
+  tags: bootstrap_control_node
+
+# Currently this has to be done in nora-os-cluster play
+#
+#- name: "Add user <{{ lookup('env','USER') }}> to docker group"
+#  user:
+#    name: "{{ lookup('env','USER') }}"
+#    append: yes
+#    groups: docker
+#  delegate_to: "{{ item }}"
+#  with_items: "{{ groups['nora-os-cluster'] }}"
+
+#https://github.com/ansible/ansible/issues/24794
+#- name: Take the newly added 'docker' group into account
+#  meta: reset_connection
+
+- name: "Precheck Openstack cluster"
+  command: kolla-ansible -i multinode prechecks
+  args:
+    chdir: /etc/kolla
+  become: false
+  tags: precheck_cluster
+
+- name: "Pull Openstack cluster images"
+  command: kolla-ansible -i multinode pull
+  args:
+    chdir: /etc/kolla
+  become: false
+  tags: pull_images
+
+- name: "Deploy Openstack cluster"
+  command: "kolla-ansible -i multinode deploy -e 'ansible_become=true' -e 'ansible_become_method=sudo'"
+  args:
+    chdir: /etc/kolla
+  become: false
+  tags: deploy_cluster
+
+- name: "Post deploy Openstack cluster [Step 1]"
+  command: kolla-ansible post-deploy
+  tags: post-deploy-step1
+
+- name: "Post deploy Openstack cluster [Step 2]"
+  pip:
+    name: "{{ item }}"
+    state: latest
+  with_items:
+    - python-openstackclient
+    - python-glanceclient
+    - python-neutronclient
+    - python-heatclient
+  tags: post-deploy-step2
+
+#- name: "Post deploy Openstack cluster [Step 3]"
+#  shell: |
+#    . /etc/kolla/admin-openrc.sh
+#    . /usr/local/share/kolla-ansible/init-runonce
+#  tags: post-deploy-step3
+#  become: false

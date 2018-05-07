@@ -1,0 +1,6 @@
+[Service]
+MountFlags=shared
+ExecStart=
+ExecStart=/usr/bin/docker daemon \
+ -H fd:// \
+ --mtu 1400

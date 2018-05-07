@@ -1,0 +1,26 @@
+coe-srv-03 ansible_host=10.86.9.14 ansible_connection=ssh
+coe-srv-04 ansible_host=10.86.9.15 ansible_connection=ssh
+coe-srv-05 ansible_host=10.86.9.16 ansible_connection=ssh
+coe-srv-06 ansible_host=10.86.9.17 ansible_connection=ssh
+nora-wistar-01 ansible_host=192.168.122.66 ansible_connection=ssh
+
+[seeds]
+seed-01 ansible_host=192.168.122.12 ansible_connection=local
+
+[wistar]
+nora-wistar-01
+
+[nora-os-cluster]
+coe-srv-03
+coe-srv-04
+coe-srv-05
+coe-srv-06
+
+[nora-os-controller]
+coe-srv-03
+
+[nora-os-compute]
+coe-srv-03
+coe-srv-04
+coe-srv-05
+coe-srv-06
